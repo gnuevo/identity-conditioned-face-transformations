@@ -1,7 +1,7 @@
 import os
 import argparse
 from solver import Solver
-from data_loader import get_loader
+from data_loader_celeba import get_loader
 from torch.backends import cudnn
 
 
@@ -24,27 +24,21 @@ def main(config):
 
     # Data loader.
     celeba_loader = None
-    rafd_loader = None
 
-    if config.dataset in ['CelebA', 'Both']:
-        celeba_loader = get_loader(config.celeba_image_dir, config.attr_path, config.selected_attrs,
-                                   config.celeba_crop_size, config.image_size, config.batch_size,
-                                   'CelebA', config.mode, config.num_workers)
-    if config.dataset in ['RaFD', 'Both']:
-        rafd_loader = get_loader(config.rafd_image_dir, None, None,
-                                 config.rafd_crop_size, config.image_size, config.batch_size,
-                                 'RaFD', config.mode, config.num_workers)
-    
+    celeba_loader = get_loader(config.celeba_image_dir,
+                               config.metadata_path,
+                               config.crop_size,
+                               config.image_size,
+                               config.batch_size,
+                               config.mode)
 
     # Solver for training and testing StarGAN.
-    solver = Solver(celeba_loader, rafd_loader, config)
+    solver = Solver(celeba_loader, None, config)
 
     if config.mode == 'train':
-        if config.dataset in ['CelebA', 'RaFD']:
-            solver.train()
-        elif config.dataset in ['Both']:
-            solver.train_multi()
+        solver.train_icfat()
     elif config.mode == 'test':
+        raise NotImplementedError()
         if config.dataset in ['CelebA', 'RaFD']:
             solver.test()
         elif config.dataset in ['Both']:
@@ -53,6 +47,24 @@ def main(config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
+    # New commands
+    parser.add_argument('--margin', type=float, default=0.8, help='margin of the triplet loss')
+    parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
+    parser.add_argument('--embed_dim', type=int, default=10, help='dimension of the id embedding')
+    parser.add_argument('--crop_size', type=int, default=10, help='crop size')
+    parser.add_argument('--metadata_path', type=str,
+                        help='path of the id metadata file')
+    parser.add_argument('--num_epochs_decay', type=int, default=10,
+                        help='dummy for now')
+    parser.add_argument('--decay_rate', type=float, default=10.0, help='dummy '
+                                                                   'for now')
+    parser.add_argument('--decay_step', type=int, default=10, help='dummy '
+                                                                   'for now')
+    parser.add_argument('--steps_per_epoch', type=int, default=10,
+                        help='dummy for now')
+
+
 
     # Model configuration.
     parser.add_argument('--c_dim', type=int, default=5, help='dimension of domain labels (1st dataset)')
