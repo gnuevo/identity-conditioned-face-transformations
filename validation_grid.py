@@ -1,19 +1,19 @@
 import torch
 
-class ImageGrid(object):
+class ValidationImageGrid(object):
     """Creates a grid of images according to the validation fashion:
     + the first row contains the conditioning images
     + the first column contains the input images
     + the remaining positions x(a,b) contain input(a) | conditioning(b)
     """
 
-    def __init__(self):
+    def __init__(self, num_cond):
         self.current_row = [] # buffer that contains the current row
         self.input_column = [] # column with the original input images
         self.cond_row = [] # row with the original conditioning images
         self.all_rows = [] # contains all rows
         self.index = 0
-        self.num_cond = 0
+        self.num_cond = num_cond
 
     def add_images(self, A, B, C):
         """Adds images to the grid
@@ -24,13 +24,13 @@ class ImageGrid(object):
             C: batch of output (transformed) images
         """
         for a, b, c in zip(A, B, C):
-            self.current_row.append(c.cpu())
+            self.current_row.append(c.to('cpu'))
 
             if self.index % self.num_cond == 0:
-                self.input_column.append(a.cpu())
+                self.input_column.append(a.to('cpu'))
 
             if self.index < self.num_cond:
-                self.cond_row.append(b.cpu())
+                self.cond_row.append(b.to('cpu'))
 
             self.index += 1
             if self.index % self.num_cond == 0:
