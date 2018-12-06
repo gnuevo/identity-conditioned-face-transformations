@@ -23,14 +23,13 @@ def main(config):
         os.makedirs(config.result_dir)
 
     # Data loader.
-    celeba_loader = None
-
     celeba_loader = get_loader(config.celeba_image_dir,
                                config.metadata_path,
                                config.crop_size,
                                config.image_size,
                                config.batch_size,
-                               config.mode)
+                               config.mode,
+                               validation=(10, 5))
 
     # Solver for training and testing StarGAN.
     solver = Solver(celeba_loader, None, config)

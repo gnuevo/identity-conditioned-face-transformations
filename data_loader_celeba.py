@@ -14,7 +14,7 @@ from torchvision import transforms
 
 class CelebADataset(Dataset):
     def __init__(self, image_path, metadata_path, transform=lambda x:x,
-                 validation=4000, val_samples=None):
+                 validation=(100, 25), val_samples=None):
         self.image_path = image_path
         self.metadata_path = metadata_path
         self.transform = transform
@@ -22,10 +22,47 @@ class CelebADataset(Dataset):
         self.val_samples = val_samples
 
         print("Preprocessing dataset...")
-        self.preprocess_dataset()
+        self.preprocess_dataset(validation)
         print("done")
 
-    def preprocess_dataset(self):
+    def compute_validation_samples(self, pictures, validation=(None, None)):
+        """Produces the validation dataset
+
+        Args:
+            pictures: the list of all the pictures in the dataset
+            validation: tuple(#input, #cond) or tuple([input], [cond])
+
+        Returns: the restricted set of pictures and the validation dataset
+        object
+
+        """
+        shuffle(pictures)
+        if type(validation[0]) == int and type(validation[1]) == int:
+            num_validation = validation[0] + validation[1]
+            train_pictures = pictures[:-num_validation]
+            val_pictures = pictures[-num_validation:]
+            val_input = val_pictures[:validation[0]]
+            val_cond = val_pictures[validation[0]:]
+        elif type(validation[0]) == list and type(validation[1]) == list:
+            val_input = validation[0]
+            val_cond = validation[1]
+            train_pictures = set(pictures) - set(val_input) - set(val_cond)
+        else:
+            raise TypeError("validation must be an iterable of length=2 "
+                            "where both elements are ints or lists")
+        return train_pictures, val_input, val_cond
+
+    def get_validation_dataset(self):
+        """Returns the loader for the validation images
+
+        Returns: loader for validation images
+        """
+        return ValidationDataset(self.val_input,
+                                 self.val_cond,
+                                 self.transform,
+                                 self.image_path)
+
+    def preprocess_dataset(self, validation):
         """Reads the dataset and creates the following variables
 
         self.image_ids: list of all ids
@@ -38,7 +75,9 @@ class CelebADataset(Dataset):
         Returns: None
 
         """
-        self.pictures = listdir(self.image_path)
+        self.pictures, self.val_input,self.val_cond = \
+            self.compute_validation_samples(listdir(self.image_path), validation)
+
         pictures_set = set(self.pictures)
         shuffle(self.pictures)
         self.image_id2name, self.image_name2id = {}, {}
@@ -63,8 +102,6 @@ class CelebADataset(Dataset):
             list(filter(lambda x: self.image_name2id[x] in ids_multiple_set,
                         self.pictures))
 
-        # TODO validation stuff
-
     def __len__(self):
         return len(self.pictures_multiple)
 
@@ -79,6 +116,7 @@ class CelebADataset(Dataset):
         ))
         # choose a random negative image, ensure that it's id is not idA
         while True:
+            #FIXME doing choice on a list can be time consuming, better dict?
             pictureN = random.choice(self.pictures)
             if not self.image_name2id[pictureN] == idA: break
         imageP = Image.open(path.join(self.image_path, pictureP))
@@ -95,6 +133,31 @@ class CelebADataset(Dataset):
         return self.transform(imageA), \
                self.transform(imageP), \
                self.transform(imageN)
+
+
+class ValidationDataset(Dataset):
+    """Produces validation samples that are not part of the training set
+    """
+    def __init__(self, input_samples, conditioning_samples, transform,
+                 image_path):
+        self.input_samples = input_samples
+        self.conditioning_samples = conditioning_samples
+        new_transform = [t for t in transform.transforms if type(t)
+                         is not transforms.RandomHorizontalFlip]
+        self.transform = transforms.Compose(new_transform)
+        self.image_path = image_path
+
+    def __len__(self):
+        return len(self.input_samples) * len(self.conditioning_samples)
+
+    def __getitem__(self, item):
+        imageA = Image.open(path.join(self.image_path,
+                                      self.input_samples[item // len(
+                                          self.conditioning_samples)]))
+        imageB = Image.open(path.join(self.image_path,
+                                      self.conditioning_samples[item % len(
+                                          self.conditioning_samples)]))
+        return self.transform(imageA), self.transform(imageB)
 
 
 def get_loader(image_dir, metadata_path, crop_size, image_size,
