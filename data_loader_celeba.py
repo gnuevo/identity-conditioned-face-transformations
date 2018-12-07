@@ -47,6 +47,7 @@ class CelebADataset(Dataset):
             val_input = validation[0]
             val_cond = validation[1]
             train_pictures = set(pictures) - set(val_input) - set(val_cond)
+            train_pictures = list(train_pictures)
         else:
             raise TypeError("validation must be an iterable of length=2 "
                             "where both elements are ints or lists")

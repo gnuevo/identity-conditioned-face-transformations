@@ -15,8 +15,8 @@ The output is a transformation of `A` in which some characteristics of the ident
 ## TODO
 
 - [x] Implement main training loop
-- [ ] Validation
-- [ ] Better configuration
+- [x] Validation
+- [x] Better configuration
 - [ ] Scorer for tensorboard
 - [ ] Long training
 - [ ] Clean unused code from StarGAN

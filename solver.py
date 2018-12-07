@@ -65,6 +65,7 @@ class Solver(object):
         # Directories.
         self.log_dir = config.log_dir
         self.sample_dir = config.sample_dir
+        self.validation_dir = config.validation_dir
         self.model_save_dir = config.model_save_dir
         self.result_dir = config.result_dir
 
@@ -262,7 +263,6 @@ class Solver(object):
         black_size = [1]
         black_size.extend(imageA.size())
 
-        # TODO retrieve validation information
         # TODO scorer
 
         criterion = torch.nn.MarginRankingLoss(margin=self.margin)
@@ -275,8 +275,8 @@ class Solver(object):
         start_time = time.time()
         for e in range(start_iters, self.num_epochs):
             for i, (batchA, batchP, batchN) in enumerate(self.data_loader):
-                break
-                # FIXME delete remanenet from the time where you had to
+                # print('.', end='')
+                # FIXME delete remanent from the time where you had to
                 # convert to variables
                 imageA = batchA.to(self.device)
                 imageP = batchP.to(self.device)
@@ -475,7 +475,7 @@ class Solver(object):
                         grid.add_images(batchA, batchB, fake_batch)
                 validation_image = grid.compose()
                 save_image(self.denorm(validation_image.data.cpu()),
-                           os.path.join(self.sample_dir,
+                           os.path.join(self.validation_dir,
                                         "{}_{}_validation.png".format(e + 1,
                                                                  i + 1)),
                            nrow=1,
