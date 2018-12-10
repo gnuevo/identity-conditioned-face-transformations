@@ -31,7 +31,8 @@ def read_validation(code):
     Args:
         code:
 
-    Returns: a
+    Returns: a tuple with the validation information, it can be 2 integers
+    or two lists of images
 
     """
     error = False
@@ -56,6 +57,9 @@ def read_validation(code):
         except KeyError:
             print("ERROR: wrong format of the validation information")
             raise
+    except FileNotFoundError:
+        print("Validation file not found.")
+        raise
     except:
         error = True
 
