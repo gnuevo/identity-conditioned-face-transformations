@@ -176,6 +176,10 @@ if __name__ == '__main__':
     parser.add_argument('--resume_iters', type=int, default=None, help='resume training from this step')
     parser.add_argument('--selected_attrs', '--list', nargs='+', help='selected attributes for the CelebA dataset',
                         default=['Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Male', 'Young'])
+    parser.add_argument('--save_on_epoch', default=False,
+                        action="store_true",
+                        help='If true then --model_save_step refers to '
+                             'epochs, otherwise iterations')
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')

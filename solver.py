@@ -13,6 +13,7 @@ from collections import OrderedDict
 from validation_grid import ValidationImageGrid
 from torch.utils.data import DataLoader
 from scorer import Scorer
+import json
 
 
 class Solver(object):
@@ -55,6 +56,7 @@ class Solver(object):
         self.selected_attrs = config.selected_attrs
         self.decay_step = config.decay_step
         self.decay_rate = config.decay_rate
+        self.save_epochs = config.save_on_epoch
 
         # Test configurations.
         self.test_iters = config.test_iters
@@ -69,6 +71,7 @@ class Solver(object):
         self.validation_dir = config.validation_dir
         self.model_save_dir = config.model_save_dir
         self.result_dir = config.result_dir
+        self.path = config.path
 
         # Step size.
         self.log_step = config.log_step
@@ -220,6 +223,34 @@ class Solver(object):
             return F.binary_cross_entropy_with_logits(logit, target, size_average=False) / logit.size(0)
         elif dataset == 'RaFD':
             return F.cross_entropy(logit, target)
+
+    def save_training(self, epoch, iteration, g_lr, d_lr):
+        # save models
+        torch.save(self.G.state_dict(),
+                   os.path.join(self.model_save_dir,
+                                "{}_{}_G.pth".format(epoch, iteration)))
+        torch.save(self.D_src.state_dict(),
+                   os.path.join(self.model_save_dir,
+                                "{}_{}_D_src.pth".format(epoch, iteration)))
+        torch.save(self.D_cls.state_dict(),
+                   os.path.join(self.model_save_dir,
+                                "{}_{}_D_cls.pth".format(epoch, iteration)))
+
+        # save status
+        with open(os.path.join(self.path, "config.json"), 'r') as f:
+            config = json.load(f)
+        status = {
+            "epoch": epoch,
+            "iteration": iteration,
+            "G": "{}_{}_G.pth".format(epoch, iteration),
+            "D_src": "{}_{}_D_src.pth".format(epoch, iteration),
+            "D_cls": "{}_{}_D_cls.pth".format(epoch, iteration),
+            "g_lr": g_lr,
+            "d_lr": d_lr
+        }
+        config['status'] = status
+        with open(os.path.join(self.path, "config.json"), 'w') as f:
+            json.dump(config, f, indent=4)
 
     def train_icfat(self):
         # TODO ###### ##  ###   ## ###############
@@ -446,6 +477,12 @@ class Solver(object):
                                                        e * iters_per_epoch +
                                                        i + 1)
 
+                # save model
+                if not self.save_epochs and \
+                        (i + 1) % self.model_save_step == 0:
+                    self.save_training(e, i, self.g_lr, self.d_lr)
+                    print("Saved models..!")
+
             # ================== Debugging images ================== #
             if (e + 1) % self.sample_step == 0:
                 with torch.no_grad():
@@ -502,20 +539,6 @@ class Solver(object):
                     self.sample_dir))
 
             # ================== Checkpoints and lr decay ================== #
-            # Save model checkpoints
-            # TODO add posibility of saving in the middle of an epoch
-            if (e + 1) % self.model_save_step == 0:
-                torch.save(self.G.state_dict(),
-                           os.path.join(self.model_save_dir,
-                                        "{}_{}_G.pth".format(e + 1, i + 1)))
-                torch.save(self.D_src.state_dict(),
-                           os.path.join(self.model_save_dir,
-                                        "{}_{}_D_src.pth".format(e + 1, i + 1)))
-                torch.save(self.D_cls.state_dict(),
-                           os.path.join(self.model_save_dir,
-                                        "{}_{}_D_cls.pth".format(e + 1, i + 1)))
-                print("Saved models..!")
-
             if (e + 1) > (self.num_epochs - self.num_epochs_decay):
                 if (e - (self.num_epochs - self.num_epochs_decay)) % \
                         self.decay_step == 0:
@@ -525,6 +548,12 @@ class Solver(object):
                           "}".format(g_lr, d_lr))
                     assert g_lr > 0.0
                     assert d_lr > 0.0
+
+            # Save model checkpoints
+            if not self.save_epochs and \
+                    (i + 1) % self.model_save_step == 0:
+                self.save_training(e, 0, self.g_lr, self.d_lr)
+                print("Saved models..!")
 
         # Save model checkpoints when training is done
         torch.save(self.G.state_dict(),
