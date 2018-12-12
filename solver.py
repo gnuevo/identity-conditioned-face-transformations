@@ -12,6 +12,7 @@ import datetime
 from collections import OrderedDict
 from validation_grid import ValidationImageGrid
 from torch.utils.data import DataLoader
+from scorer import Scorer
 
 
 class Solver(object):
@@ -264,6 +265,13 @@ class Solver(object):
         black_size.extend(imageA.size())
 
         # TODO scorer
+        scorer = Scorer(self.batch_size,
+                        variables=(
+                            'D_cls/Distance_same',
+                            'D_cls/Distance_different',
+                            'G/Distance_same',
+                            'G/Distance_different'
+                        ))
 
         criterion = torch.nn.MarginRankingLoss(margin=self.margin)
 
@@ -303,6 +311,7 @@ class Solver(object):
                 }
                 log = []
                 log.extend([d['D_cls/distance_same'], d['D_cls/distance_different']])
+                scorer.add(d)
                 if(i + 1) % self.log_step == 0:
                     print('Classification distances (same/different): ', end='')
                     print(log)
@@ -405,15 +414,15 @@ class Solver(object):
                     # Compute classification accuracy of the discriminator
                     # FIXME I think there's a problem here, shouldn't it be
                     # positive_distance the one between idN and idG?
-                    positive_distance = torch.sum(F.pairwise_distance(idP,
-                                                                      idG)).item()
-                    negative_distance = torch.sum(F.pairwise_distance(idA,
-                                                                      idG)).item()
+                    positive_distance = torch.sum(
+                        F.pairwise_distance(idP, idG)).item()
+                    negative_distance = torch.sum(
+                        F.pairwise_distance(idA, idG)).item()
                     d = {
                         'G/Distance_same': positive_distance / len(idG),
                         'G/Distance_different': negative_distance / len(idG)
                     }
-                    # FIXME scorer.add(d)
+                    scorer.add(d)
 
                 # Print log info
                 if (i + 1) % self.log_step == 0:
@@ -428,6 +437,14 @@ class Solver(object):
                     print(log)
 
                     # FIXME scores stuff!
+                    scores = scorer.get_scores()
+                    for key, value in scores.items():
+                        loss[key] = value
+                    if self.use_tensorboard:
+                        for tag, value in loss.items():
+                            self.logger.scalar_summary(tag, value,
+                                                       e * iters_per_epoch +
+                                                       i + 1)
 
             # ================== Debugging images ================== #
             if (e + 1) % self.sample_step == 0:

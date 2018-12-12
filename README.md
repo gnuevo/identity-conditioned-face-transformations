@@ -17,7 +17,9 @@ The output is a transformation of `A` in which some characteristics of the ident
 - [x] Implement main training loop
 - [x] Validation
 - [x] Better configuration
-- [ ] Scorer for tensorboard
+    - [ ] Configuration based on config file (`--configuration <file>`)
+- [ ] Resume training (`--continue <traning_config>`)
+- [x] Scorer for tensorboard
 - [ ] Long training
 - [ ] Clean unused code from StarGAN
 
