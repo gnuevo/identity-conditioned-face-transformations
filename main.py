@@ -7,21 +7,29 @@ import datetime
 from collections import OrderedDict
 import sys
 import json
+from argparse_actions import Actions
 
 
 def str2bool(v):
     return v.lower() in ('true')
 
 
-def write_configuration(configuration, file):
-    data = OrderedDict()
+def write_configuration(configuration, path, file_name):
+    file_path = os.path.join(path, file_name)
+    if os.path.isfile(file_path):
+        with open(file_path, 'r') as f:
+            data = OrderedDict(json.load(f))
+    else:
+        data = OrderedDict()
     cmd = ' '.join(sys.argv)
     data['time'] = configuration.time
     data['cmd'] = cmd
     data['command'] = OrderedDict()
     for arg in vars(configuration):
         data['command'][arg] = getattr(configuration, arg)
-    with open(file, 'w') as f:
+    data['command']['validation'] = os.path.join(path, "validation.json")
+
+    with open(file_path, 'w') as f:
         f.write(json.dumps(data, indent=4))
 
 
@@ -88,7 +96,7 @@ def main(config):
         os.makedirs(config.validation_dir)
 
     # save configuration
-    write_configuration(config, os.path.join(config.path, "config.json"))
+    write_configuration(config, config.path, "config.json")
 
     validation = read_validation(config.validation)
 
@@ -146,8 +154,10 @@ if __name__ == '__main__':
                                                                    'for now')
     parser.add_argument('--steps_per_epoch', type=int, default=10,
                         help='dummy for now')
-
-
+    parser.add_argument('--resume_training', type=str, default=None,
+                        action=Actions.ReadFromFile(),
+                        help='path to the config file where you want to read'
+                        'the configuration from')
 
     # Model configuration.
     parser.add_argument('--c_dim', type=int, default=5, help='dimension of domain labels (1st dataset)')
@@ -212,6 +222,6 @@ if __name__ == '__main__':
 
     config = parser.parse_args()
     config.time = t # starting time
-    config.path = path # path to the training folder
+    config.path = os.path.join(*config.log_dir.split('/')[:-1]) # path to the training folder
     print(config)
     main(config)

@@ -57,6 +57,7 @@ class Solver(object):
         self.decay_step = config.decay_step
         self.decay_rate = config.decay_rate
         self.save_epochs = config.save_on_epoch
+        self.resume_training = config.resume_training
 
         # Test configurations.
         self.test_iters = config.test_iters
@@ -138,7 +139,7 @@ class Solver(object):
         print(name)
         print("The number of parameters: {}".format(num_params))
 
-    def restore_model(self, resume_iters):
+    def restore_model_(self, resume_iters):
         """Restore the trained generator and discriminator."""
         raise NotImplementedError()
         print('Loading the trained models from step {}...'.format(resume_iters))
@@ -146,6 +147,23 @@ class Solver(object):
         D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(resume_iters))
         self.G.load_state_dict(torch.load(G_path, map_location=lambda storage, loc: storage))
         self.D.load_state_dict(torch.load(D_path, map_location=lambda storage, loc: storage))
+
+    def restore_model(self, epoch, iteration):
+        """Restore the trained generator and discriminator."""
+        print('Loading the trained models from epoch {} iteration {'
+              '}...'.format(epoch, iteration))
+        G_path = os.path.join(self.model_save_dir,
+                              "{}_{}_G.pth".format(epoch, iteration))
+        D_src_path = os.path.join(self.model_save_dir,
+                               "{}_{}_D_src.pth".format(epoch, iteration))
+        D_cls_path = os.path.join(self.model_save_dir,
+                                  "{}_{}_D_src.pth".format(epoch, iteration))
+        self.G.load_state_dict(
+            torch.load(G_path, map_location=lambda storage, loc: storage))
+        self.D_src.load_state_dict(
+            torch.load(D_src_path, map_location=lambda storage, loc: storage))
+        self.D_cls.load_state_dict(
+            torch.load(D_cls_path, map_location=lambda storage, loc: storage))
 
     def build_tensorboard(self):
         """Build a tensorboard logger."""
@@ -278,10 +296,24 @@ class Solver(object):
 
         # Start training from scratch or resume training.
         # FIXME this will need to change
+        start_epoch = 0
         start_iters = 0
-        if self.resume_iters:
-            start_iters = self.resume_iters
-            self.restore_model(self.resume_iters)
+        if self.resume_training is not None:
+            # recover status
+            with open(self.resume_training, 'r') as f:
+                status = json.load(f)['status']
+            start_epoch = status['epoch']
+            start_iters = status['iteration']
+            g_lr = status['g_lr']
+            d_lr = status['d_lr']
+            # reload models
+            self.restore_model(start_epoch, start_iters)
+
+
+        # start_iters = 0
+        # if self.resume_iters:
+        #     start_iters = self.resume_iters
+        #     self.restore_model(self.resume_iters)
 
         fixed_x = []
         total = 50
@@ -295,7 +327,6 @@ class Solver(object):
         black_size = [1]
         black_size.extend(imageA.size())
 
-        # TODO scorer
         scorer = Scorer(self.batch_size,
                         variables=(
                             'D_cls/Distance_same',
@@ -312,11 +343,14 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
-        for e in range(start_iters, self.num_epochs):
+        for e in range(start_epoch, self.num_epochs):
             for i, (batchA, batchP, batchN) in enumerate(self.data_loader):
-                # print('.', end='')
-                # FIXME delete remanent from the time where you had to
-                # convert to variables
+                # current_iteration is used to keep the global iteration in
+                # the case of resuming training
+                current_iteration = i + start_iters + 1 if e == start_epoch else i
+                if e == start_epoch and i > (len(self.data_loader) -
+                                             start_iters):
+                    break
                 imageA = batchA.to(self.device)
                 imageP = batchP.to(self.device)
                 imageN = batchN.to(self.device)
@@ -475,12 +509,12 @@ class Solver(object):
                         for tag, value in loss.items():
                             self.logger.scalar_summary(tag, value,
                                                        e * iters_per_epoch +
-                                                       i + 1)
+                                                       current_iteration + 1)
 
                 # save model
                 if not self.save_epochs and \
                         (i + 1) % self.model_save_step == 0:
-                    self.save_training(e, i, self.g_lr, self.d_lr)
+                    self.save_training(e, current_iteration, self.g_lr, self.d_lr)
                     print("Saved models..!")
 
             # ================== Debugging images ================== #
@@ -504,7 +538,8 @@ class Solver(object):
                     fake_images = torch.cat(debugging_samples, dim=2)
                 save_image(self.denorm(fake_images.data.cpu()),
                            os.path.join(self.sample_dir,
-                                        "{}_{}_fake.png".format(e + 1, i + 1)),
+                                        "{}_{}_fake.png".format(e + 1,
+                                                                current_iteration + 1)),
                            nrow=1,
                            padding=0)
                 torch.enable_grad()
@@ -531,7 +566,7 @@ class Solver(object):
                 save_image(self.denorm(validation_image.data.cpu()),
                            os.path.join(self.validation_dir,
                                         "{}_{}_validation.png".format(e + 1,
-                                                                 i + 1)),
+                                                                 current_iteration + 1)),
                            nrow=1,
                            padding=0)
                 torch.enable_grad()
