@@ -270,6 +270,61 @@ class Solver(object):
         with open(os.path.join(self.path, "config.json"), 'w') as f:
             json.dump(config, f, indent=4)
 
+    def generate_debugging_images(self, fixed_x, epoch, iteration):
+        with torch.no_grad():
+            debugging_samples = []
+            A_images = [a for a, b in fixed_x]
+            B_images = [b for a, b in fixed_x]
+            for a, b in zip(A_images, B_images):
+                a = a.to(self.device)
+                b = b.to(self.device)
+                _, idA = self.D_cls(a)
+                _, idB = self.D_cls(b)
+                fake_image = self.G(a, idB)
+                rec_image = self.G(fake_image, idA)
+                row = [b.to('cpu'), a.to('cpu')]
+                row.append(fake_image.to('cpu'))
+                row.append(rec_image.to('cpu'))
+                debugging_samples.append(torch.cat(row, dim=3))
+                torch.cuda.empty_cache()
+            fake_images = torch.cat(debugging_samples, dim=2)
+        save_image(self.denorm(fake_images.data.cpu()),
+                   os.path.join(self.sample_dir,
+                                "{}_{}_fake.png".format(epoch + 1,
+                                                        iteration + 1)),
+                   nrow=1,
+                   padding=0)
+        torch.enable_grad()
+        print("Translated images and saved to {}..!".format(self.sample_dir))
+
+    def generate_validation_images(self, epoch, iteration):
+        with torch.no_grad():
+            val_data_loader = self.data_loader.dataset.get_validation_dataset()
+            validation_loader = DataLoader(val_data_loader,
+                                           self.batch_size)
+            grid = ValidationImageGrid(len(
+                val_data_loader.conditioning_samples))
+            with torch.no_grad():
+                for batchA, batchB in validation_loader:
+                    batchA = batchA.to(self.device)
+                    batchB = batchB.to(self.device)
+                    batchA = batchA.detach()
+                    batchB = batchB.detach()
+                    _, idA = self.D_cls(batchA)
+                    _, idB = self.D_cls(batchB)
+                    fake_batch = self.G(batchA, idB)
+                    grid.add_images(batchA, batchB, fake_batch)
+            validation_image = grid.compose()
+            save_image(self.denorm(validation_image.data.cpu()),
+                       os.path.join(self.validation_dir,
+                                    "{}_{}_validation.png".format(epoch + 1,
+                                                                  iteration + 1)),
+                       nrow=1,
+                       padding=0)
+        torch.enable_grad()
+        print("Validation images and saved to {}..!".format(
+            self.sample_dir))
+
     def train_icfat(self):
         # TODO ###### ##  ###   ## ###############
         # TODO   ##  #  # #  # #  # ##############
@@ -514,64 +569,18 @@ class Solver(object):
                 # save model
                 if not self.save_epochs and \
                         (i + 1) % self.model_save_step == 0:
+                    self.generate_debugging_images(fixed_x, e,
+                                                   current_iteration)
+                    self.generate_validation_images(e, current_iteration)
                     self.save_training(e, current_iteration, self.g_lr, self.d_lr)
                     print("Saved models..!")
 
             # ================== Debugging images ================== #
             if (e + 1) % self.sample_step == 0:
-                with torch.no_grad():
-                    debugging_samples = []
-                    A_images = [a for a, b in fixed_x]
-                    B_images = [b for a, b in fixed_x]
-                    for a, b in zip(A_images, B_images):
-                        a = a.to(self.device)
-                        b = b.to(self.device)
-                        _, idA = self.D_cls(a)
-                        _, idB = self.D_cls(b)
-                        fake_image = self.G(a, idB)
-                        rec_image = self.G(fake_image, idA)
-                        row = [b.to('cpu'), a.to('cpu')]
-                        row.append(fake_image.to('cpu'))
-                        row.append(rec_image.to('cpu'))
-                        debugging_samples.append(torch.cat(row, dim=3))
-                        torch.cuda.empty_cache()
-                    fake_images = torch.cat(debugging_samples, dim=2)
-                save_image(self.denorm(fake_images.data.cpu()),
-                           os.path.join(self.sample_dir,
-                                        "{}_{}_fake.png".format(e + 1,
-                                                                current_iteration + 1)),
-                           nrow=1,
-                           padding=0)
-                torch.enable_grad()
-                print("Translated images and saved to {}..!".format(self.sample_dir))
+                self.generate_debugging_images(fixed_x, e, current_iteration)
 
             if (e + 1) % self.sample_step == 0:
-                torch.no_grad()
-                val_data_loader = self.data_loader.dataset.get_validation_dataset()
-                validation_loader = DataLoader(val_data_loader,
-                                               self.batch_size)
-                grid = ValidationImageGrid(len(
-                    val_data_loader.conditioning_samples))
-                with torch.no_grad():
-                    for batchA, batchB in validation_loader:
-                        batchA = batchA.to(self.device)
-                        batchB = batchB.to(self.device)
-                        batchA = batchA.detach()
-                        batchB = batchB.detach()
-                        _, idA = self.D_cls(batchA)
-                        _, idB = self.D_cls(batchB)
-                        fake_batch = self.G(batchA, idB)
-                        grid.add_images(batchA, batchB, fake_batch)
-                validation_image = grid.compose()
-                save_image(self.denorm(validation_image.data.cpu()),
-                           os.path.join(self.validation_dir,
-                                        "{}_{}_validation.png".format(e + 1,
-                                                                 current_iteration + 1)),
-                           nrow=1,
-                           padding=0)
-                torch.enable_grad()
-                print("Validation images and saved to {}..!".format(
-                    self.sample_dir))
+                self.generate_validation_images(e, current_iteration)
 
             # ================== Checkpoints and lr decay ================== #
             if (e + 1) > (self.num_epochs - self.num_epochs_decay):
