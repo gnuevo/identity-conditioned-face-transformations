@@ -42,6 +42,10 @@ class Scorer(object):
             dict: dictionary with containing values for the target variables
         """
         for key, value in dict.items():
+            if not key in self.variables:
+                raise ValueError("Provided key '{}' to scorer that is not "
+                                 "contained in the list of watched keys {"
+                                 "}".format(key, self.variables))
             if key in self.variables:
                 self._single_add(key, value)
 

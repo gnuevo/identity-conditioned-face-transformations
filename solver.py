@@ -384,10 +384,10 @@ class Solver(object):
 
         scorer = Scorer(self.batch_size,
                         variables=(
-                            'D_cls/Distance_same',
-                            'D_cls/Distance_different',
-                            'G/Distance_same',
-                            'G/Distance_different'
+                            'D_cls/distance_same',
+                            'D_cls/distance_different',
+                            'G/distance_same',
+                            'G/distance_different'
                         ))
 
         criterion = torch.nn.MarginRankingLoss(margin=self.margin)
@@ -539,8 +539,8 @@ class Solver(object):
                     negative_distance = torch.sum(
                         F.pairwise_distance(idA, idG)).item()
                     d = {
-                        'G/Distance_same': positive_distance / len(idG),
-                        'G/Distance_different': negative_distance / len(idG)
+                        'G/distance_same': positive_distance / len(idG),
+                        'G/distance_different': negative_distance / len(idG)
                     }
                     scorer.add(d)
 
@@ -556,7 +556,6 @@ class Solver(object):
                         log += ", {}: {:.4f}".format(tag, value)
                     print(log)
 
-                    # FIXME scores stuff!
                     scores = scorer.get_scores()
                     for key, value in scores.items():
                         loss[key] = value
